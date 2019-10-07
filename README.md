@@ -1,16 +1,16 @@
+
 #win Actisha_infra
 Actisha Infra repository
 
 
-#HW1 Git
+#### #HW1 Git
 First PR
 
-#HW2 ChatOps
+#### #HW2 ChatOps
 Integration: GitHub, Slack, Travis
 travis encrypt "devops-team-otus:<token>#<user-group>" --add notifications.slack.rooms --com
 
-#HW3 GCP
-***---------------------------***
+#### #HW3 GCP
 [actisha@localhost ~]$ cat /etc/hosts
 *nix
 34.76.93.197 bastion
@@ -59,7 +59,7 @@ Welcome to Ubuntu 16.04.6 LTS (GNU/Linux 4.15.0-1042-gcp x86_6
 bastion_IP = 34.76.93.197
 someinternalhost_IP = 10.132.0.3
 
-***---------------------------***
+---------------------------
 Развертывание mongodb и printul с помощью готового setupvpn.sh (файл, описывающий установку VPN-сервера)
 $ sudo bash setupvpn.sh
 
@@ -70,12 +70,11 @@ Last login: Tue Oct  1 15:25:42 2019 from laptop-nkm50cmp.mymifi
 [actisha@localhost ~]$ ssh -i ~/.ssh/appuser appuser@10.132.0.3
 Welcome to Ubuntu 16.04.6 LTS (GNU/Linux 4.15.0-1042-gcp x86_64)
 
-***---------------------------***
+---------------------------
 Web-морда VPN (большое спасибо Svetozar за предоставленную возможность :))
 https://hannamonty.systemctl.tech/
 
-#HW4 GCP testapp
-***---------------------------***
+#### #HW4 GCP testapp
 Установка Google Cloud SDK и создание нового инстанса reddit-app
 
 gcloud compute instances create reddit-app
@@ -89,11 +88,13 @@ gcloud compute instances create reddit-app
 testapp_IP = 34.77.75.82 
 testapp_port = 9292  
 
+
 Подключение к серверу
 ssh appuser@reddit-app
 
 Установка Ruby и Bundler
-***---------------------------***
+
+---------------------------
 $ sudo apt update
 $ sudo apt install -y ruby-full ruby-bundler build-essential
 
@@ -101,7 +102,8 @@ ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]
 Bundler version 1.11.2
 
 Установка MongoDB
-***---------------------------***
+
+---------------------------
 sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
 sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
 sudo apt update
@@ -110,7 +112,8 @@ sudo systemctl start mongod
 sudo systemctl enable mongod
 
 Деплой приложения
-***---------------------------***
+
+---------------------------
 Выполнить в домашней директории appuser git clone -b monolith https://github.com/express42/reddit.git
 Устанавливаем зависимости приложения cd reddit && bundle install
 Запуск СП puma -d
@@ -125,7 +128,8 @@ sudo systemctl enable mongod
 scp install_ruby.sh appuser@reddit-app:/home/appuser/
 
 Создание инстансов и установка необходимого ПО
-***---------------------------***
+
+---------------------------
 gcloud compute instances create reddit-app\
   --boot-disk-size=10GB \
   --image-family ubuntu-1604-lts \
@@ -136,12 +140,11 @@ gcloud compute instances create reddit-app\
   --metadata-from-file startup-script-url=/home/appuser/startup_script.sh
 
 Работа с правилами
-***---------------------------***
+
+---------------------------
 default-puma-server
 
 gcloud compute firewall-rules create default-puma-server\
   --allow=tcp:9292 \
   --source-ranges="0.0.0.0/0" \
   --target-tags=puma-server \
-
-

@@ -148,3 +148,26 @@ gcloud compute firewall-rules create default-puma-server\
   --allow=tcp:9292 \
   --source-ranges="0.0.0.0/0" \
   --target-tags=puma-server \
+
+#### #HW5 GCP. Packer
+Выполнен перенос скриптов из предыдущего ДЗ в каталог config-scripts.
+
+В каталог packer/scripts/  скопированы скрипты: 
+install_mongodb.sh  
+install_ruby.sh   
+
+Установлен packer.
+Создан Packer шаблон (ubuntu16.json), с помощью которого собираем наш образ с предустановленными Ruby и MongoDB.
+Выполнена проверка валидности созданного шаблона - ```packer validate ./ubuntu16.json.```
+Запуск билда - ```packer build ubuntu16.json```
+Запуск приложения:
+```
+ssh appuser@104.199.106.99
+git clone -b monolith https://github.com/express42/reddit.git  
+cd reddit && bundle install  
+puma -d
+```
+Проверка - http://104.199.106.99:9292/
+
+
+

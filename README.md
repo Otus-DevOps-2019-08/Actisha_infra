@@ -167,7 +167,9 @@ git clone -b monolith https://github.com/express42/reddit.git
 cd reddit && bundle install  
 puma -d
 ```
-Проверка - http://104.199.106.99:9292/
+Проверка подключения - http://104.199.106.99:9292/
 
-
+Параметризованы переменные в variables.json, файл добавлен в .gitignore.
+Проверка запуска - packer build -var-file variables.json ubuntu16.json.
+Полет нормальный. 
 

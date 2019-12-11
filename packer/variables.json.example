@@ -1,0 +1,6 @@
+{
+  "project_id": "infra-number",
+  "source_image_family": "bubunta_name",
+  "machine_type": "3XL"
+}
+

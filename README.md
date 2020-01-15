@@ -477,6 +477,13 @@ Cоздана директория *terraform->modules->vpc*.
 ```terraform apply```
 Проверено в GSP - созадлся Storage - https://console.cloud.google.com/storage/browser/sweetops-storage-hanna / gs://sweetops-storage-hanna
 
+--------------------------- 
+## Задание*
+В каталогах stage и prod создан файл **backend.tf**.
+в каждом каталоге выполнена команда ```terraform init```.
+Конфиги были вынесены в другую директорию, по очереди в каждом каталоге запущен Terraform.
+При запуске конфигурации одновременно срабатывают блокировки.
+
 
 
 

@@ -246,9 +246,11 @@ terraform apply
 Определена input переменная для приватного ключа, использующегося в определении подключения для провижинеров (connection). Для этого:
  - в **terraform.tfvars** добавлен параметр private_key_path с указанием пути до приватного ключа ```private_key_path = "~/.ssh/appuser"```
  - в **variables.tf** добавлено
-```variable private_key_path {
+ 
+variable private_key_path {
   description = "Path to the private key used for connection"
-}```
+}
+
 - в **main.tf** получаем значение пользовательской переменной
 ```private_key = file(var.private_key_path)```
 

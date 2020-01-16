@@ -314,12 +314,16 @@ https://www.terraform.io/docs/configuration/resources.html
 Для этого в директории packer, были созданы шаблоны **db.json**(с установкой Mongodb) и **app.json** (с установкой Ruby).
 
 Провалидировали файлы:
-```packer -var-file variables.json validate app.json
-packer -var-file variables.json validate db.json```
+```
+packer -var-file variables.json validate app.json
+packer -var-file variables.json validate db.json
+```
 
 Запекли образы:
-```packer build -var-file variables.json app.json
-packer build -var-file variables.json db.json```
+```
+packer build -var-file variables.json app.json
+packer build -var-file variables.json db.json
+```
 
 В директории terrafor конфиг **main.tf** разбит на три:
 **app.tf**(приложение),
@@ -327,8 +331,12 @@ packer build -var-file variables.json db.json```
 **vpc.tf**(firewall rules для ssh).
 
 В **variables.tf** добавлено описание переменных image-ей для БД и APP:
-```variable app_disk_image {   description = "Disk image for reddit app"   default = "reddit-app-base" }```
-```variable db_disk_image {   description = "Disk image for reddit db"   default = "reddit-db-base" }```
+```
+variable app_disk_image {   description = "Disk image for reddit app"   default = "reddit-app-base" }
+```
+```
+variable db_disk_image {   description = "Disk image for reddit db"   default = "reddit-db-base" }
+```
 
 В **vpc.tf** выносим правило firewall_ssh:
 ```
@@ -343,17 +351,21 @@ source_ranges = ["0.0.0.0/0"]
 ```
  
 в **main.tf** осталось:
-```provider "google" 
+```
+provider "google" 
 {  
 version = "~> 2.15"   
 project = var.project   
 region = var.region 
-}```
+}
+```
  
 Выполнено:
-```terraform fmt
+```
+terraform fmt
 terraform plan
-terraform apply``` 
+terraform apply
+``` 
 
 Результат: всё успешно созадлось. 
 
@@ -406,19 +418,23 @@ module "db" {
 Для использования модулей они были загружены в *.terraform* командой ```terraform get```.
 Выполнена команда ```terraform plan```.
 Если возникнет ошибка  *output 'app_external_ip': unknown resource 'google_compute_instance.app'*, то необходимо переопределить переменную.
-```output "app_external_ip" {   value = module.app.app_external_ip }```
+```
+output "app_external_ip" {   value = module.app.app_external_ip }
+```
 Повторно выполнена команда ```terraform plan```.
 
 Аналогично предыдущим модулям создан модуль vpc, в котором определены настройки firewall_ssh:
 Cоздана директория *terraform->modules->vpc*. 
 В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
 Описан вызов модуля в основном конфиге main.tf:
-```module "vpc" {
+```
+  module "vpc" {
   source          = "./modules/vpc"
   project         = var.project
   public_key_path = var.public_key_path
   zone            = var.zone
-}```
+}
+```
 В директории terraform удален **vpc.tf**. 
 Выполнены команды: 
 ```terraform get```
@@ -541,24 +557,30 @@ ansible 2.9.4 (с помощью предварительно созданног
 Запускаем проверку, что ansible имеет доступ к нашей инфраструктуре в части db:
 ```ansible dbserver -i ./inventory -m ping```
 Вывод:
-```dbserver | SUCCESS => {
+```
+dbserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "changed": false,
     "ping": "pong"
-}```
+}
+```
 
 Создан конфиг **ansible.cfg** в директории *ansible*.
-```inventory = ./inventory 
+```
+inventory = ./inventory 
 remote_user = appuser 
 private_key_file = ~/.ssh/appuser 
-host_key_checking = False retry_files_enabled = False```
+host_key_checking = False retry_files_enabled = False
+```
 
 Скорретирован **inventory**:
-```$ cat inventory
+```
+$ cat inventory
 appserver ansible_host=35.195.74.19
-dbserver ansible_host=35.233.123.223```
+dbserver ansible_host=35.233.123.223
+```
 
 Для проверки выполнено:
 ```ansible dbserver -m command -a uptime```
@@ -567,8 +589,10 @@ dbserver ansible_host=35.233.123.223```
 Команд *uptime* передается как аргумент для данного модуля, с помощью опции *-a*.
 
 Вывод:
-```dbserver | CHANGED | rc=0 
- 13:01:22 up  1:56,  1 user,  load average: 0.07, 0.02, 0.00```
+```
+dbserver | CHANGED | rc=0 
+ 13:01:22 up  1:56,  1 user,  load average: 0.07, 0.02, 0.00
+ ```
  
 --------------------------- 
 ##Работа с группами хостов
@@ -582,13 +606,15 @@ dbserver ansible_host=35.233.123.223
 ```
 Проверяем результат ```ansible app -m ping```:
 
-```appserver | SUCCESS => {
+```
+  appserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "changed": false,
     "ping": "pong"
-}```
+}
+```
 
 *app* - имя группы, 
 *-m ping* - имя модуля Ansible, 
@@ -597,7 +623,8 @@ dbserver ansible_host=35.233.123.223
 --------------------------- 
 ##Создание inventory.yml
 
-```app:
+```
+app:
   hosts:
     appserver:
       ansible_host: 35.195.74.19
@@ -605,25 +632,30 @@ dbserver ansible_host=35.233.123.223
 db:
   hosts:
     dbserver:
-      ansible_host: 35.233.123.223 ```
+      ansible_host: 35.233.123.223 
+```
 
 Проверяем корректность ```ansible all -m ping -i inventory.yml```:
 
-```appserver | SUCCESS => {
+```
+appserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "changed": false,
     "ping": "pong"
-}```
+}
+```
 
-```dbserver | SUCCESS => {
+```
+dbserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "changed": false,
     "ping": "pong"
-}```
+}
+```
 
 Ключ -i переопределяет путь к инвентори файлу.
 
@@ -631,36 +663,49 @@ db:
 ##Выполнение команд через ansible
 
 Проверка версии Ruby на app-сервере через ansible ```ansible app -m command -a 'ruby -v'```:
-```appserver | CHANGED | rc=0 >>
-ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]```
+```
+appserver | CHANGED | rc=0 >>
+ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]
+```
 
 Проверка bundler на app-сервере через ansible```ansible app -m command -a 'bundler -v'```:
-```appserver | CHANGED | rc=0 >>
-Bundler version 1.11.2```
+```
+appserver | CHANGED | rc=0 >>
+Bundler version 1.11.2
+```
 
 Проверка запуска двух команд через модуль command:
 ```ansible app -m command -a 'ruby -v; bundler -v'```
 
-```appserver | FAILED | rc=1 >>
-ruby: invalid option -;  (-h will show valid options) (RuntimeError)non-zero return code```
+```
+appserver | FAILED | rc=1 >>
+ruby: invalid option -;  (-h will show valid options) (RuntimeError)non-zero return code
+```
 
 Завершилось с ошибкой, т.к. модуль *command* выполняет команды, не используя оболочку (sh, bash), поэтому в нем не работают перенаправления потоков и нет доступа к некоторым переменным окружения.
 
 Проверка выполнения через модуль *shell* ```ansible app -m shell -a 'ruby -v; bundler -v'```:
-```appserver | CHANGED | rc=0 >>
+```
+appserver | CHANGED | rc=0 >>
 ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]
-Bundler version 1.11.2```
+Bundler version 1.11.2
+```
 
 Проверка на хосте с БД статус сервиса MongoDB с помощью модуля command или shell(эта операция аналогична запуску на хосте команды systemctl status mongod).```ansible db -m command -a 'systemctl status mongod'```:
 
-```dbserver | CHANGED | rc=0 >>
-● mongod.service - High-performance, schema-free document-oriented database```
+```
+dbserver | CHANGED | rc=0 >>
+● mongod.service - High-performance, schema-free document-oriented database
+```
 Через модуль *shell* ```ansible db -m shell -a 'systemctl status mongod'```:
-```dbserver | CHANGED | rc=0 >>
-● mongod.service - High-performance, schema-free document-oriented database```
+```
+dbserver | CHANGED | rc=0 >>
+● mongod.service - High-performance, schema-free document-oriented database
+```
 
 И еще разочек, но с помощью модуля *systemd*, который предназначен для управления сервисами```ansible db -m systemd -a name=mongod```:
-```dbserver | SUCCESS => {
+```
+dbserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
@@ -668,11 +713,13 @@ Bundler version 1.11.2```
     "name": "mongod",
     "status": {
 ...
-        "ActiveState": "active"```
+        "ActiveState": "active"
+		```
 И совсем последний разочек с помощью модуля *service*, который более универсален и будет работать и в более старых ОС с init.d инициализацией
  ```ansible db -m service -a name=mongod```:
 
-```dbserver | SUCCESS => {
+```
+dbserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
@@ -680,21 +727,25 @@ Bundler version 1.11.2```
     "name": "mongod",
     "status": {
 ...
-        "ActiveState": "active"```
+        "ActiveState": "active"
+		```
 Используем модуль *git* для клонирования репозитория на app-сервер ```ansible app -m git -a 'repo=https://github.com/express42/reddit.git dest=/home/appuser/reddit'```:
 
-```appserver | CHANGED => {
+```
+appserver | CHANGED => {
     "after": "5c217c565c1122c5343dc0514c116ae816c17ca2",
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "before": null,
     "changed": true
-}```
+}
+```
 
 Повторно выполняем команду:
 
-```appserver | SUCCESS => {
+```
+appserver | SUCCESS => {
     "after": "5c217c565c1122c5343dc0514c116ae816c17ca2",
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
@@ -702,7 +753,8 @@ Bundler version 1.11.2```
     "before": "5c217c565c1122c5343dc0514c116ae816c17ca2",
     "changed": false,
     "remote_url_changed": false
-}```
+}
+```
 
 Разница в значениях переменных (это значит, что изменения не произошли). Само выполнение повторное команды проходит успешно.
    * "before": null,

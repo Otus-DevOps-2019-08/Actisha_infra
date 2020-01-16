@@ -246,9 +246,11 @@ terraform apply
 Определена input переменная для приватного ключа, использующегося в определении подключения для провижинеров (connection). Для этого:
  - в **terraform.tfvars** добавлен параметр private_key_path с указанием пути до приватного ключа ```private_key_path = "~/.ssh/appuser"```
  - в **variables.tf** добавлено
-```variable private_key_path {
+ 
+variable private_key_path {
   description = "Path to the private key used for connection"
-}```
+}
+
 - в **main.tf** получаем значение пользовательской переменной
 ```private_key = file(var.private_key_path)```
 
@@ -268,6 +270,469 @@ terraform apply
 
 Добавлен в веб-интерфейсе в метаданные проекта ключ ssh для юзера appuser_web. 
 После выполнения в консоли ```terraform apply```, после чего юзер appuser_web удалился.
+
+#### #HW7 Terraform 2
+
+Создана ветка terraform-2, создана инфраструктура по шаблонам из HW6 в директории terraform (```terraform apply```).
+Проверено дефолтное правило для ssh:
+```gcloud compute firewall-rules list```
+
+В **main.tf** создан ресурс firewall resource "google_compute_firewall" "firewall_ssh" с описанием:
+``` name = "default-allow-ssh"   network = "default" 
+   allow {     protocol = "tcp"     ports = ["22"]   } 
+   source_ranges = ["0.0.0.0/0"] }```
+
+Выполнено ```terraform apply```, соответственно, возникла ошибка, т.к. terraform не знает, что данное правило firewall уже существует. 
+Для того, чтобы ее избежать необходимо импортировать информацию о созданных без помощи terraform ресурсах.
+```terraform import google_compute_firewall.firewall_ssh default-allow-ssh```
+Снова выполнено ```terraform apply```. Теперь всё отработало корректно.
+
+В **main.tf** добавлен ресурс google_compute_address (используется для определения IP-адреса).
+*В случае, если после добавления этого ресурса на следующем шаге падает терраформ с ошибкой Quota 'STATIC_ADDRESSES' exceeded, необходимо зайти в VPC Network -> external ip addresses и удалить static ip, который был зарезервирован под инстанс бастиона.
+
+Удалена и создана заново инфраструктура.
+
+*Ссылку в одном ресурсе на атрибуты другого тераформ понимает как зависимость одного ресурса от другого. Это влияет на очередность создания и удаления ресурсов при применении изменений.
+
+Соответственно, в ресурсе "google_compute_instance" был определен IP-адрес для создаваемого инстанса (это не явная зависимость):
+```network_interface {
+ network = "default"
+ access_config { nat_ip = google_compute_address.app_ip.address } 
+ }```
+
+Также Terraform поддерживает также явную зависимость используя параметр ```depends_on```:
+https://www.terraform.io/docs/configuration/resources.html
+
+--------------------------- 
+##Структуризация ресурсов
+
+БД вынесена на отдельный инстанс VM. 
+Для этого в директории packer, были созданы шаблоны **db.json**(с установкой Mongodb) и **app.json** (с установкой Ruby).
+
+Провалидировали файлы:
+```packer -var-file variables.json validate app.json
+packer -var-file variables.json validate db.json```
+
+Запекли образы:
+```packer build -var-file variables.json app.json
+packer build -var-file variables.json db.json```
+
+В директории terrafor конфиг **main.tf** разбит на три:
+**app.tf**(приложение),
+**db.tf**(БД),
+**vpc.tf**(firewall rules для ssh).
+
+В **variables.tf** добавлено описание переменных image-ей для БД и APP:
+```variable app_disk_image {   description = "Disk image for reddit app"   default = "reddit-app-base" }```
+```variable db_disk_image {   description = "Disk image for reddit db"   default = "reddit-db-base" }```
+
+В **vpc.tf** выносим правило firewall_ssh:
+```resource "google_compute_firewall" "firewall_ssh" {   
+name = "default-allow-ssh"   network = "default"   
+allow {    
+ protocol = "tcp"     
+ ports = ["22"]   
+ }   
+source_ranges = ["0.0.0.0/0"] 
+}```
+ 
+в **main.tf** осталось:
+```provider "google" 
+{  
+version = "~> 2.15"   
+project = var.project   
+region = var.region 
+}```
+ 
+Выполнено:
+```terraform fmt
+terraform plan
+terraform apply``` 
+
+Результат: всё успешно созадлось. 
+
+--------------------------- 
+##Модули
+
+В директории terraform создана директория *modules->db*. В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
+В **variables.tf**:
+```variable public_key_path {   description = "Path to the public key used to connect to instance" } 
+variable zone {   description = "Zone" } 
+variable db_disk_image {   description = "Disk image for reddit db"   default     = "reddit-db-base" }```
+В директории terraform создана директория *modules->app*. В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
+В **variables.tf**:
+```variable public_key_path {   description = "Path to the public key used to connect to instance" } 
+variable zone {   description = "Zone" } 
+variable app_disk_image {   description = "Disk image for reddit app"   default     = "reddit-app-base" }```
+В **outputs.tf**:
+```output "app_external_ip" {   value = google_compute_instance.app.network_interface.0.access_config.0.assigned_nat_ip }```
+
+В директории terraform удалены **db.tf** и **app.tf**. 
+Скорректирован файл **main.tf**:
+```provider "google" {
+  version = "~> 2.15"
+  project = var.project
+  region  = var.region
+}
+module "app" {
+  source          = "./modules/app"
+  project         = var.project
+  public_key_path = var.public_key_path
+  zone            = var.zone
+  app_disk_image  = var.app_disk_image
+}
+module "db" {
+  source          = "./modules/db"
+  project         = var.project
+  public_key_path = var.public_key_path
+  zone            = var.zone
+  db_disk_image   = var.db_disk_image
+}```
+
+Для использования модулей они были загружены в *.terraform* командой ```terraform get```.
+Выполнена команда ```terraform plan```.
+Если возникнет ошибка  *output 'app_external_ip': unknown resource 'google_compute_instance.app'*, то необходимо переопределить переменную.
+```output "app_external_ip" {   value = module.app.app_external_ip }```
+Повторно выполнена команда ```terraform plan```.
+
+Аналогично предыдущим модулям создан модуль vpc, в котором определены настройки firewall_ssh:
+Cоздана директория *terraform->modules->vpc*. 
+В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
+Описан вызов модуля в основном конфиге main.tf:
+```module "vpc" {
+  source          = "./modules/vpc"
+  project         = var.project
+  public_key_path = var.public_key_path
+  zone            = var.zone
+}```
+В директории terraform удален **vpc.tf**. 
+Выполнены команды: 
+```terraform get```
+```terraform apply```
+
+Результат - в GCP появилось правило фаерволла для ssh, к обоим инстансам можно подключиться по ssh.
+
+--------------------------- 
+### Параметризация модулей
+В **vpc.tf** параметрезирован модуль за счёт использования input переменных.
+В **main.tf** в ресурс ```resource "google_compute_firewall" "firewall_ssh"```добавлено описание:
+```source_ranges = var.source_ranges```
+В **variables.tf** добавлено описание IP-адресов, с которых возможен доступ.
+```variable source_ranges {
+  description = "Allowed IP addresses"
+  default     = ["0.0.0.0/0"]
+}```
+
+Проведен эксперимент, в блоке, описывающем подключение модуля vpc, добавлено правило, позволяющее доступ только с моего IP:
+```source_ranges = ["my_ip/32"]```
+Доступ был разрешен только с моего IP. 
+Возвращено значение 0.0.0.0/0 в source_ranges.
+
+Ресурсы были удалены:
+```terraform destroy``` 
+  
+--------------------------- 
+## Создание Stage & Prod
+В директории terraform создана директории *modules->stage* и *modules->prod*.
+Из директории terraform в них скопированы файлы: **main.tf**,**terraform.tfvars**, **variables.tf**, **outputs.tf**.  
+
+В **main.tf** для *stage* открыт ssh доступ для всех IP-адресов:
+```module "vpc" {
+  source          = "../modules/vpc"
+  project         = var.project
+  public_key_path = var.public_key_path
+  source_ranges   = ["0.0.0.0/0"]
+}```
+
+В **main.tf** для *prod* открыт ssh доступ для конкретного IP-адреса:
+```module "vpc" {
+  source          = "../modules/vpc"
+  project         = var.project
+  public_key_path = var.public_key_path
+  source_ranges   = ["94.25.168.212/32"]
+}```
+Также в **main.tf** были скорректированы пути ко всем модулям "../modules/app" и др.
+
+Выполнена проверка правильности настроек конфигурации для каждого окружения:
+выполнено получение модулей ```terraform get```,
+произведена инициализация ```terraform init```,
+применены изменения ```terraform apply```,
+удалены созданные ресурсы ```terraform destroy```.
+
+--------------------------- 
+## Самостоятельное задание
+Удалены файлы **main.tf**,**terraform.tfvars**, **variables.tf**, **outputs.tf** из директории terraform. 
+Выполнена частичная параметризация конфигурации модулей.
+Отформатированы конфигурационные файлы ```terraform fmt```.
+
+--------------------------- 
+## Реестр модулей
+Ссылка на публичный реестр модулей от HashiCorp - https://registry.terraform.io/
+Для создания бакета в сервисе Storage использован модуль *storage-bucket* - https://registry.terraform.io/modules/SweetOps/storage-bucket/google/0.3.0
+В директории terraform был созадн файл **storage-bucket.tf**.
+Затем туда же были скопированы файлы **variables.tf** и **terraform.tfvars**. 
+Выполнено проверка и применени. 
+```terraform fmt```
+```terraform get```
+```terraform init```
+```terraform plan```
+```terraform apply```
+Проверено в GSP - созадлся Storage - https://console.cloud.google.com/storage/browser/sweetops-storage-hanna / gs://sweetops-storage-hanna
+
+--------------------------- 
+## Задание*
+В каталогах stage и prod создан файл **backend.tf**.
+в каждом каталоге выполнена команда ```terraform init```.
+Конфиги были вынесены в другую директорию, по очереди в каждом каталоге запущен Terraform.
+При запуске конфигурации одновременно срабатывают блокировки.
+
+#### #HW8 Ansible 1
+
+Выполнена установка/проверка наличия:
+Python 2.7.5
+pip 19.3.1 from /usr/lib/python2.7/site-packages/pip (python 2.7)
+ansible 2.9.4 (с помощью предварительно созданного файла **requirements.txt** - ```pip install -r requirements.txt```)
+
+--------------------------- 
+##Управление хостом при помощи Ansible 
+Создана инфраструктура из окружения *stage* -  ```terraform apply```.
+В директории *ansible* создан файл **inventory**.
+```appserver ansible_host=@my_ip@ ansible_user=appuser ansible_private_key_file=~/.ssh/appuser```
+
+Запускаем проверку, что ansible имеет доступ к нашей инфраструктуре в части app:
+```ansible appserver -i ./inventory -m ping```
+Вывод:
+```appserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "ping": "pong"
+}```
+
+```-m ping``` - вызываемый модуль 
+```-i ./inventory``` - путь до файла инвентори 
+```appserver``` - Имя хоста, которое указали в инвентори, откуда Ansible yзнает, как подключаться к хосту.
+
+Аналогично проделано для инстанса с БД.
+```dbserver ansible_host=35.233.123.223 ansible_user=appuser ansible_private_key_file=~/.ssh/appuser```
+Запускаем проверку, что ansible имеет доступ к нашей инфраструктуре в части db:
+```ansible dbserver -i ./inventory -m ping```
+Вывод:
+```dbserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "ping": "pong"
+}```
+
+Создан конфиг **ansible.cfg** в директории *ansible*.
+```inventory = ./inventory 
+remote_user = appuser 
+private_key_file = ~/.ssh/appuser 
+host_key_checking = False retry_files_enabled = False```
+
+Скорретирован **inventory**:
+```$ cat inventory
+appserver ansible_host=35.195.74.19
+dbserver ansible_host=35.233.123.223```
+
+Для проверки выполнено:
+```ansible dbserver -m command -a uptime```
+Модуль *command* позволяет запускать произвольные команды на удаленном хосте.
+Команда *uptime* показывает время работы инстанса. 
+Команд *uptime* передается как аргумент для данного модуля, с помощью опции *-a*.
+
+Вывод:
+```dbserver | CHANGED | rc=0 
+ 13:01:22 up  1:56,  1 user,  load average: 0.07, 0.02, 0.00```
+ 
+--------------------------- 
+##Работа с группами хостов
+
+Скорректировала **inventory** файл для упрощения работы с группами хостов:
+```
+[app]
+appserver ansible_host=35.195.74.19
+[db]
+dbserver ansible_host=35.233.123.223
+```
+Проверяем результат ```ansible app -m ping```:
+
+```appserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "ping": "pong"
+}```
+
+*app* - имя группы, 
+*-m ping* - имя модуля Ansible, 
+*appserver* - имя сервера в группе, для которого применился модуль.
+
+--------------------------- 
+##Создание inventory.yml
+
+```app:
+  hosts:
+    appserver:
+      ansible_host: 35.195.74.19
+
+db:
+  hosts:
+    dbserver:
+      ansible_host: 35.233.123.223 ```
+
+Проверяем корректность ```ansible all -m ping -i inventory.yml```:
+
+```appserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "ping": "pong"
+}```
+
+```dbserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "ping": "pong"
+}```
+
+Ключ -i переопределяет путь к инвентори файлу.
+
+--------------------------- 
+##Выполнение команд через ansible
+
+Проверка версии Ruby на app-сервере через ansible ```ansible app -m command -a 'ruby -v'```:
+```appserver | CHANGED | rc=0 >>
+ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]```
+
+Проверка bundler на app-сервере через ansible```ansible app -m command -a 'bundler -v'```:
+```appserver | CHANGED | rc=0 >>
+Bundler version 1.11.2```
+
+Проверка запуска двух команд через модуль command:
+```ansible app -m command -a 'ruby -v; bundler -v'```
+
+```appserver | FAILED | rc=1 >>
+ruby: invalid option -;  (-h will show valid options) (RuntimeError)non-zero return code```
+
+Завершилось с ошибкой, т.к. модуль *command* выполняет команды, не используя оболочку (sh, bash), поэтому в нем не работают перенаправления потоков и нет доступа к некоторым переменным окружения.
+
+Проверка выполнения через модуль *shell* ```ansible app -m shell -a 'ruby -v; bundler -v'```:
+```appserver | CHANGED | rc=0 >>
+ruby 2.3.1p112 (2016-04-26) [x86_64-linux-gnu]
+Bundler version 1.11.2```
+
+Проверка на хосте с БД статус сервиса MongoDB с помощью модуля command или shell(эта операция аналогична запуску на хосте команды systemctl status mongod).```ansible db -m command -a 'systemctl status mongod'```:
+
+```dbserver | CHANGED | rc=0 >>
+● mongod.service - High-performance, schema-free document-oriented database```
+Через модуль *shell* ```ansible db -m shell -a 'systemctl status mongod'```:
+```dbserver | CHANGED | rc=0 >>
+● mongod.service - High-performance, schema-free document-oriented database```
+
+И еще разочек, но с помощью модуля *systemd*, который предназначен для управления сервисами```ansible db -m systemd -a name=mongod```:
+```dbserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "name": "mongod",
+    "status": {
+...
+        "ActiveState": "active"```
+И совсем последний разочек с помощью модуля *service*, который более универсален и будет работать и в более старых ОС с init.d инициализацией
+ ```ansible db -m service -a name=mongod```:
+
+```dbserver | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "changed": false,
+    "name": "mongod",
+    "status": {
+...
+        "ActiveState": "active"```
+Используем модуль *git* для клонирования репозитория на app-сервер ```ansible app -m git -a 'repo=https://github.com/express42/reddit.git dest=/home/appuser/reddit'```:
+
+```appserver | CHANGED => {
+    "after": "5c217c565c1122c5343dc0514c116ae816c17ca2",
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "before": null,
+    "changed": true
+}```
+
+Повторно выполняем команду:
+
+```appserver | SUCCESS => {
+    "after": "5c217c565c1122c5343dc0514c116ae816c17ca2",
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python"
+    },
+    "before": "5c217c565c1122c5343dc0514c116ae816c17ca2",
+    "changed": false,
+    "remote_url_changed": false
+}```
+
+Разница в значениях переменных (это значит, что изменения не произошли). Само выполнение повторное команды проходит успешно.
+   * "before": null,
+   * "changed": true
+ и при втором выполнении эти параметры уже стали:
+   * "before": "5c217c565c1122c5343dc0514c116ae816c17ca2",
+   * "changed": false,
+   * "remote_url_changed": false
+   
+Аналогично выполним с модулем *command* ```ansible app -m command -a 'git clone https://github.com/express42/reddit.git /home/appuser/reddit'```:
+
+Повторное выполнение завершается с ошибкой.
+```appserver | FAILED | rc=128 >>
+fatal: destination path '/home/appuser/reddit' already exists and is not an empty directory.non-zero return code```
+
+--------------------------- 
+##Создание простого playbook для ansible
+Созан файл **clone.yml**, выполняющий клонирование репозитория аналогично предыдущим командам:
+```- name: Clone
+  hosts: app
+  tasks:
+    - name: Clone repo
+      git:
+        repo: https://github.com/express42/reddit.git
+        dest: /home/appuser/reddit```
+
+Выполнена команда ```ansible-playbook clone.yml```:
+PLAY RECAP ********************************************************************************************************************
+appserver                  : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+Выполнено удаление каталога с репозиторием  ```ansible app -m command -a 'rm -rf ~/reddit'```:
+```appserver | CHANGED | rc=0 >>```
+
+Повторно выполнен playbook, клонирующий репозиторий:
+PLAY RECAP ********************************************************************************************************************
+appserver                  : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+Как видим, выполнилось одно изменени. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

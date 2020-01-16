@@ -278,9 +278,11 @@ variable private_key_path {
 ```gcloud compute firewall-rules list```
 
 В **main.tf** создан ресурс firewall resource "google_compute_firewall" "firewall_ssh" с описанием:
-``` name = "default-allow-ssh"   network = "default" 
+``` 
+   name = "default-allow-ssh"   network = "default" 
    allow {     protocol = "tcp"     ports = ["22"]   } 
-   source_ranges = ["0.0.0.0/0"] }```
+   source_ranges = ["0.0.0.0/0"] }
+```
 
 Выполнено ```terraform apply```, соответственно, возникла ошибка, т.к. terraform не знает, что данное правило firewall уже существует. 
 Для того, чтобы ее избежать необходимо импортировать информацию о созданных без помощи terraform ресурсах.
@@ -295,10 +297,12 @@ variable private_key_path {
 *Ссылку в одном ресурсе на атрибуты другого тераформ понимает как зависимость одного ресурса от другого. Это влияет на очередность создания и удаления ресурсов при применении изменений.
 
 Соответственно, в ресурсе "google_compute_instance" был определен IP-адрес для создаваемого инстанса (это не явная зависимость):
-```network_interface {
+```
+network_interface {
  network = "default"
  access_config { nat_ip = google_compute_address.app_ip.address } 
- }```
+ }
+```
 
 Также Terraform поддерживает также явную зависимость используя параметр ```depends_on```:
 https://www.terraform.io/docs/configuration/resources.html
@@ -327,14 +331,16 @@ packer build -var-file variables.json db.json```
 ```variable db_disk_image {   description = "Disk image for reddit db"   default = "reddit-db-base" }```
 
 В **vpc.tf** выносим правило firewall_ssh:
-```resource "google_compute_firewall" "firewall_ssh" {   
+```
+resource "google_compute_firewall" "firewall_ssh" {   
 name = "default-allow-ssh"   network = "default"   
 allow {    
  protocol = "tcp"     
  ports = ["22"]   
  }   
 source_ranges = ["0.0.0.0/0"] 
-}```
+}
+```
  
 в **main.tf** осталось:
 ```provider "google" 
@@ -356,20 +362,27 @@ terraform apply```
 
 В директории terraform создана директория *modules->db*. В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
 В **variables.tf**:
-```variable public_key_path {   description = "Path to the public key used to connect to instance" } 
+```
+variable public_key_path {   description = "Path to the public key used to connect to instance" } 
 variable zone {   description = "Zone" } 
-variable db_disk_image {   description = "Disk image for reddit db"   default     = "reddit-db-base" }```
+variable db_disk_image {   description = "Disk image for reddit db"   default     = "reddit-db-base" }
+```
 В директории terraform создана директория *modules->app*. В неё перенесены файлы **main.tf**, **variables.tf**, **outputs.tf**.
 В **variables.tf**:
-```variable public_key_path {   description = "Path to the public key used to connect to instance" } 
+```
+variable public_key_path {   description = "Path to the public key used to connect to instance" } 
 variable zone {   description = "Zone" } 
-variable app_disk_image {   description = "Disk image for reddit app"   default     = "reddit-app-base" }```
+variable app_disk_image {   description = "Disk image for reddit app"   default     = "reddit-app-base" }
+```
 В **outputs.tf**:
-```output "app_external_ip" {   value = google_compute_instance.app.network_interface.0.access_config.0.assigned_nat_ip }```
+```
+output "app_external_ip" {   value = google_compute_instance.app.network_interface.0.access_config.0.assigned_nat_ip }
+```
 
 В директории terraform удалены **db.tf** и **app.tf**. 
 Скорректирован файл **main.tf**:
-```provider "google" {
+```
+  provider "google" {
   version = "~> 2.15"
   project = var.project
   region  = var.region
@@ -387,7 +400,8 @@ module "db" {
   public_key_path = var.public_key_path
   zone            = var.zone
   db_disk_image   = var.db_disk_image
-}```
+}
+```
 
 Для использования модулей они были загружены в *.terraform* командой ```terraform get```.
 Выполнена команда ```terraform plan```.
@@ -418,10 +432,12 @@ Cоздана директория *terraform->modules->vpc*.
 В **main.tf** в ресурс ```resource "google_compute_firewall" "firewall_ssh"```добавлено описание:
 ```source_ranges = var.source_ranges```
 В **variables.tf** добавлено описание IP-адресов, с которых возможен доступ.
-```variable source_ranges {
+```
+variable source_ranges {
   description = "Allowed IP addresses"
   default     = ["0.0.0.0/0"]
-}```
+}
+```
 
 Проведен эксперимент, в блоке, описывающем подключение модуля vpc, добавлено правило, позволяющее доступ только с моего IP:
 ```source_ranges = ["my_ip/32"]```
@@ -437,20 +453,24 @@ Cоздана директория *terraform->modules->vpc*.
 Из директории terraform в них скопированы файлы: **main.tf**,**terraform.tfvars**, **variables.tf**, **outputs.tf**.  
 
 В **main.tf** для *stage* открыт ssh доступ для всех IP-адресов:
-```module "vpc" {
+```
+  module "vpc" {
   source          = "../modules/vpc"
   project         = var.project
   public_key_path = var.public_key_path
   source_ranges   = ["0.0.0.0/0"]
-}```
+}
+```
 
 В **main.tf** для *prod* открыт ssh доступ для конкретного IP-адреса:
-```module "vpc" {
+```
+  module "vpc" {
   source          = "../modules/vpc"
   project         = var.project
   public_key_path = var.public_key_path
   source_ranges   = ["94.25.168.212/32"]
-}```
+}
+```
 Также в **main.tf** были скорректированы пути ко всем модулям "../modules/app" и др.
 
 Выполнена проверка правильности настроек конфигурации для каждого окружения:
@@ -502,13 +522,15 @@ ansible 2.9.4 (с помощью предварительно созданног
 Запускаем проверку, что ansible имеет доступ к нашей инфраструктуре в части app:
 ```ansible appserver -i ./inventory -m ping```
 Вывод:
-```appserver | SUCCESS => {
+```
+  appserver | SUCCESS => {
     "ansible_facts": {
         "discovered_interpreter_python": "/usr/bin/python"
     },
     "changed": false,
     "ping": "pong"
-}```
+}
+```
 
 ```-m ping``` - вызываемый модуль 
 ```-i ./inventory``` - путь до файла инвентори 

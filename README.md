@@ -703,7 +703,7 @@ dbserver | CHANGED | rc=0 >>
 ● mongod.service - High-performance, schema-free document-oriented database
 ```
 
-И еще разочек, но с помощью модуля *systemd*, который предназначен для управления сервисами```ansible db -m systemd -a name=mongod```:
+И еще разочек, но с помощью модуля *systemd*, который предназначен для управления сервисами ```ansible db -m systemd -a name=mongod```:
 ```
 dbserver | SUCCESS => {
     "ansible_facts": {
@@ -714,7 +714,7 @@ dbserver | SUCCESS => {
     "status": {
 ...
         "ActiveState": "active"
-		```
+```
 И совсем последний разочек с помощью модуля *service*, который более универсален и будет работать и в более старых ОС с init.d инициализацией
  ```ansible db -m service -a name=mongod```:
 
@@ -728,7 +728,7 @@ dbserver | SUCCESS => {
     "status": {
 ...
         "ActiveState": "active"
-		```
+```
 Используем модуль *git* для клонирования репозитория на app-сервер ```ansible app -m git -a 'repo=https://github.com/express42/reddit.git dest=/home/appuser/reddit'```:
 
 ```
@@ -767,26 +767,32 @@ appserver | SUCCESS => {
 Аналогично выполним с модулем *command* ```ansible app -m command -a 'git clone https://github.com/express42/reddit.git /home/appuser/reddit'```:
 
 Повторное выполнение завершается с ошибкой.
-```appserver | FAILED | rc=128 >>
-fatal: destination path '/home/appuser/reddit' already exists and is not an empty directory.non-zero return code```
+```
+appserver | FAILED | rc=128 >>
+fatal: destination path '/home/appuser/reddit' already exists and is not an empty directory.non-zero return code
+```
 
 --------------------------- 
 ##Создание простого playbook для ansible
 Созан файл **clone.yml**, выполняющий клонирование репозитория аналогично предыдущим командам:
-```- name: Clone
+```
+- name: Clone
   hosts: app
   tasks:
     - name: Clone repo
       git:
         repo: https://github.com/express42/reddit.git
-        dest: /home/appuser/reddit```
+        dest: /home/appuser/reddit
+```
 
 Выполнена команда ```ansible-playbook clone.yml```:
 PLAY RECAP ********************************************************************************************************************
 appserver                  : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 
 Выполнено удаление каталога с репозиторием  ```ansible app -m command -a 'rm -rf ~/reddit'```:
-```appserver | CHANGED | rc=0 >>```
+```
+appserver | CHANGED | rc=0 >>
+```
 
 Повторно выполнен playbook, клонирующий репозиторий:
 PLAY RECAP ********************************************************************************************************************

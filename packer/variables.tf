@@ -20,6 +20,15 @@ variable disk_image {
   description = "Disk image"
 }
 
+variable private_key_path {
+  # Описание переменной
+  description = "Path to the private key used for connection"
+}
+
+variable "names" {
+  type = list(string)
+}
+
 variable app_disk_image {
   description = "Disk image for reddit app"
   default     = "reddit-app-base"

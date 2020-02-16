@@ -937,7 +937,7 @@ ansible-playbook site.yml
     }
 ]
 ```
-В GCP удалены образы, запевены новые образы с измененными провижинерами:
+В GCP удалены образы, запечены новые образы с измененными провижинерами:
 ```
 packer build -var-file packer/variables.json packer/app.json
 packer build -var-file packer/variables.json packer/db.json
@@ -954,7 +954,169 @@ ansible-playbook site.yml
 http://35.205.216.35:9292/post/5e36d401566a780c63de9245
 
 
+#### #HW10 Ansible 3
 
+Получение справки по ansible-galaxy:
+```
+ansible-galaxy -h
+```
 
+Создана директория *roles* в директории *ansible*.
 
+В ней выполнены команды по созданию заготовок для ролей:
+```
+ansible-galaxy init app
+ansible-galaxy init db
+```
+
+[actisha@localhost db]$ ll
+итого 4
+drwxrwxr-x. 2 actisha actisha   22 янв 20 01:38 defaults
+drwxrwxr-x. 2 actisha actisha    6 янв 20 01:38 files
+drwxrwxr-x. 2 actisha actisha   22 янв 20 01:38 handlers
+drwxrwxr-x. 2 actisha actisha   22 янв 20 01:38 meta
+-rw-rw-r--. 1 actisha actisha 1328 янв 20 01:38 README.md
+drwxrwxr-x. 2 actisha actisha   22 янв 20 01:38 tasks
+drwxrwxr-x. 2 actisha actisha    6 янв 20 01:38 templates
+drwxrwxr-x. 2 actisha actisha   39 янв 20 01:38 tests
+drwxrwxr-x. 2 actisha actisha   22 янв 20 01:38 vars
+
+Была скопирована секция tasks из *ansible/db.yml* в *roles/db/tasks/main.yml*.
+Затем из директории *ansible/templates* был скопирован шаблон **mongod.conf.j2** в директорию *roles/db/templates/*.
+Был скопирован хендлер из *ansible/db.yml* в *roles/db/handlers/main.yml*.
+Определены переменные в *roles/db/defaults/main.yml*.
+
+Аналогично пошагово настраиваем роль для приложения.
+
+Пересоздаyj stage окружение.
+
+Скорректированы ip адреса для db и app в *inventory* и в **app.yml**. 
+Выполнен плейбук **site.yml**.  
+Проверена работа приложения.
+
+--------------------------- 
+## Настройка окружения
+
+В каталоге *ansible* были созданы директории *environments->stage* и *environments->prod*.
+Скопирован файл *ansible/inventory* в каталоги окружений и удален из корневой диреткории.
+Сейчас два файла инвентори (т.к. два окружения), то при запуске плейбуков необходимо указывать какой конкретно использовать:
+ ```
+ ansible-playbook -i environments/prod/inventory deploy.yml
+ ```
+Скорректирован файл **ansible.cfg** (указано окружение по умолчанию).
+Создана директория *group_vars* в директориях наших окружений *environments/prod* и *environments/stage*.
+В файл *environments/stage/group_vars/app* скопирована переменная со значением *db_host* из **app.yml**.
+Из **app.yml** удален раздел *vars*.
+В файл *environments/stage/group_vars/db* скопирована переменная со значением *mongo_bind_ip* из **db.yml**.
+Из **db.yml** удален раздел *vars*.
+Создан файл *environments/stage/group_vars/all* с переменными для группы *all*.
+Аналогично для окружения *prod*.
+Добавлен *env: local*  в **roles/app/defaults/main.yml**, аналогично для роли *db*.
+В tasks для ролей app и db добавлен вывод окружения, в котором работаем (**roles/app/tasks/main.yml** и в *db*):
+ ```
+ - name: Show info about the env this host belongs to
+  debug:
+    msg: "This host is in {{ env }} environment!!!"
+ ```
+Скорректирован файл **ansible.cfg**:
+ ```
+roles_path = ./roles 
+ 
+[diff] # Включим обязательный вывод diff при наличии изменений и вывод 5 строк контекста 
+always = True 
+context = 5
+  ```
+ ```
+Выполнен playbook.
+ ok: [appserver] => {
+    "msg": "This host is in stage environment!!!"
+}
+
+ ```
+
+Проверена работоспособность http://34.76.21.226:9292/.
+
+Аналогично выполнена настройка prod окружения.
+
+--------------------------- 
+## Работа с Community-ролями
+
+Созданы файлы **environments/stage/requirements.yml** и **environments/prod/requirements.yml** с записью:
+```
+ - src: jdauphant.nginx    
+ version: v2.21.1
+```
+Установлена роль:
+```
+ ansible-galaxy install -r environments/stage/requirements.yml
+```
+Т.к. community-роли не стоит коммитить в свой репозиторий, для этого добавим в *.gitignore* запись: *jdauphant.nginx*.
+Документация по роли https://github.com/jdauphant/ansible-role-nginx.
+
+Добавлены переменные в **environments/stage/group_vars/app** и **environments/prod/group_vars/app**:
+ ```
+ nginx_sites:
+  default:
+    - listen 80
+    - server_name "reddit"
+    - location / {
+        proxy_pass http://127.0.0.1:9292;
+      }
+ ```
+В модуле *app* конфигурации Terraform добавлено открытие 80 порта.
+Добавлен вызов роли *jdauphant.nginx* в плейбук **app.yml**.
+Пересоздана инфраструктура stage.
+Выполнен плейбук **site.yml**:
+```
+ansible-playbook playbooks/site.yml --check
+ansible-playbook playbooks/site.yml
+``` 
+Приложение работает http://34.77.7.91:9292/.
+Проверено, что приложение также доступно через порт 80.
+
+--------------------------- 
+## Работа с Ansible Vault
+
+Создан **vault.key**, его использование прописано в **ansible.cfg**: 
+``` 
+vault_password_file = ~/.ansible/vault.key
+``` 
+Также в **.gitignore** указано *vault.key*, чтобы мастер-пароль не попал в git.
+Создан playbook **users.yml**:
+``` 
+---
+- name: Create users
+  hosts: all
+  become: true
+
+  vars_files:
+    - "{{ inventory_dir }}/credentials.yml"
+
+  tasks:
+    - name: create users
+      user:
+        name: "{{ item.key }}"
+        password: "{{ item.value.password|password_hash('sha512', 65534|random(seed=inventory_hostname)|string) }}"
+        groups: "{{ item.value.groups | default(omit) }}"
+      with_dict: "{{ credentials.users }}"
+``` 
+Созданы файлы для пользователей prod и stage окружений:
+**ansible/environments/stage/credentials.yml**
+**ansible/environments/prod/credentials.yml**
+
+Зашифрованы файлы:
+```
+ansible-vault encrypt environments/stage/credentials.yml
+ansible-vault encrypt environments/prod/credentials.yml
+```
+Добавлен вызов playbook **users.yml** в *playbooks/site.yml*.
+Выполнен playbook **site.yml**.
+Проверен вход под созданными пользователями.
+Для редактирования переменных нужно использовать команду 
+```ansible-vault edit <file>
+```
+Для расшифровки: 
+```
+ansible-vault decrypt <file>
+```
 

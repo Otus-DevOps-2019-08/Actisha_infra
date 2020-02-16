@@ -5,7 +5,5 @@
  
   roles:
     - app 
-    - jdauphant.nginx
+ #  - jdauphant.nginx
     
-
-
